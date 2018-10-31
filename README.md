@@ -6,7 +6,7 @@ Python program (run on combined server) that finds the latest radial files from 
 
 Tested on OS X with Python 2.6. No external dependencies. It should be Python 3 friendly but I don't have a combined server with Python 3 to test it. 
 
-The program will write a small text file in the configured directory (default is ./) for each site that it sends an email about with the name *XXXX_last_email.txt* where XXXX is the site. The file contains the date and time the e-mail was sent so that the next run of the program won't send another e-mail unless the *email_frequency* interval has been met for that site. This allows the script to be run frequently without a barrage of e-mails coming in. If you know a site is down and don't wish to continue receving e-mails about it, remove it from the command line invocation.
+The program will write a small text file in the configured directory (default is ./) for each site alert with the name *XXXX_last_email.txt* where XXXX is the site code. The file contains the date and time the e-mail was sent so that the next run of the program won't send another e-mail unless the *email_frequency* interval has been met for that site. This allows the script to be run frequently without a barrage of e-mails coming in. If you know a site is down and don't wish to continue receving e-mails about it, remove it from the command line invocation.
 
 *Call this script periodically with cron.*
 
