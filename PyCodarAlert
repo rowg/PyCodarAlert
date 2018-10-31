@@ -180,8 +180,6 @@ for site,age in site_age_dict.items():
             #print (date_string)
             file.write(date_string)
             file.close()
-            body_text = 'PyCodarAlert e-mail:\n'
-            email_subject = '[CODAR ALERT] Site:'
 
 # Exit with result code zero (no errors)
 sys.exit(0)
