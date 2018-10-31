@@ -1,0 +1,187 @@
+#!/usr/bin/python
+
+# Jamie Davis
+# The University of Southern Mississippi, Marine Science
+# j.davis@usm.edu
+# 2018-10-26 V1.0
+
+# No copyright is asserted on any part of this work.
+
+# Python script to email alerts for any radial files older than X hours.
+# (As compared to the clock on the computer running the script.)
+# Run on codar combined site
+
+# Call this script periodically with cron.
+# Every 15 minutes example: 
+# 00,15,30,45     *       *       *       *       /Users/codar/PyCodarAlert AAAA BBBB CCCC DDDD >/dev/null 2>&1
+
+# Tested on OS X with python 2.6
+# No external dependencies.
+
+# E-mail sending example from: 
+# https://stackoverflow.com/questions/8856117/how-to-send-email-to-multiple-recipients-using-python-smtplib
+
+# Time difference calculation from:
+# http://www.tutorialsmade.com/calculate-hours-minutes-two-times-python/
+
+import smtplib
+from email.mime.text import MIMEText
+import sys
+from datetime import datetime
+import os
+
+# E-mail parameters (fill in with your organization's settings)
+smtp_server = 'smtp.organization.edu'
+body_text = 'PyCodarAlert message:\n'
+sender_name = 'your.name@organization.edu'
+recipients_list = ['your.name@organization.edu', 'person2@organization.edu', 'person3@organization.edu']
+email_subject = '[CODAR ALERT] Site:'
+
+# How often (in hours) an email can be sent (so you don't spam yourself)
+email_frequency = 4
+lastemail_path = './'
+
+# How stale (in hours) a radial file must be to trigger an alert
+alert_trigger = 12
+
+# Radial files root directory. Script will walk directory tree from here.
+radial_root = '/Codar/SeaSonde/Data/RadialSites'
+radials_list = []
+
+# Put 4 character site names here. This can be overridden at runtime.
+site_names = ['AAAA', 'BBBB', 'CCCC', 'DDDD', 'EEEE']
+site_names = map(str.upper,site_names)
+
+# Create some empty data structures (dictionaries)
+site_age_dict = {}
+site_filename_dict = {}
+
+
+# Parse command line arguments
+# These should be 4 char. site names
+# They replace the hard coded site names above.
+# If you add no command line args, hard coded sites above will be used.
+num_arguments = len(sys.argv)
+# Debugging line
+#print (num_arguments)
+if num_arguments > 1:
+    site_names = sys.argv[1:]
+    site_names = map(str.upper,site_names)
+    # Debugging line
+    #print (site_names)
+
+
+#
+# Time difference function calculates hours between now and file date-time
+#
+def hours_difference( timestring,date_format ):
+    # Get current time
+    current = datetime.now()
+    
+    # Convert string to actual date and time
+    string_time  = datetime.strptime(timestring, date_format)
+     
+    #find the difference between two date-times
+    diff = current - string_time
+    
+    # Days difference between two dates
+    days = diff.days
+    
+    # Total hours difference between two dates
+    days_to_hours = days * 24
+    diff_btw_two_times = (diff.seconds) / 3600
+    total_hours = days_to_hours + diff_btw_two_times
+    # Debugging line
+    # print (total_hours)
+    return total_hours;
+    
+#
+# E-mail sending function
+#
+def email_alert( smtp_server,body_text,sender_name,recipients_list,email_subject ):
+    server = smtplib.SMTP(smtp_server)
+    server.set_debuglevel(1)
+    msg = MIMEText(body_text)
+    sender = sender_name
+    recipients = recipients_list
+    msg['Subject'] = email_subject
+    msg['From'] = sender
+    msg['To'] = ', '.join(recipients)
+    server.sendmail(sender, recipients, msg.as_string())
+    server.quit()
+    # If your org doesn't allow smtp, you can try GMail
+    # Look here: 
+    # https://stackoverflow.com/questions/10147455/how-to-send-an-email-with-gmail-as-provider-using-python
+    # The workarounds are a bit clunky.
+
+    return;
+
+
+# Populate dictionaries of sites with age of newest file (9999) and (null) filename
+for site in site_names:
+    site_age_dict[site]=9999
+    site_filename_dict[site]=''
+    
+
+
+# Walk root radial directory to get list of .ruv files
+for root, dirs, files in os.walk(radial_root):
+    for filename in files:
+        if filename.endswith('.ruv'):
+            radials_list.append(filename)
+            
+# Go through filename list and get age in hours from each filename      
+for filename in radials_list:
+    for site,age in site_age_dict.items():
+        if site in filename:
+            tempname = (filename.rsplit( '.', 1 )[ 0 ])
+            date_time_string = tempname[-15:]
+            # Set the date and time format to radial format
+            radial_date_format = '%Y_%m_%d_%H%M'
+            delta_hours = hours_difference(date_time_string,radial_date_format)
+            if delta_hours <= age:
+                site_age_dict[site]=delta_hours
+                site_filename_dict[site]=filename
+                # Debugging line
+                #print (site_age_dict,site_filename_dict)
+        
+# Print below for debugging
+#print (site_age_dict,site_filename_dict)
+
+
+# Check age of newest radial files to decide if alert is needed
+for site,age in site_age_dict.items():
+    if age >= alert_trigger:
+        email_subject = email_subject + ' ' + site
+        body_text = body_text + '\n' + 'Site:' + site + '\nAge:' + str(age) + ' hours' + '\nLast file received:' + site_filename_dict[site] + '\n'
+        # Email alert for each site with stale files
+        email_file = lastemail_path + site + '_last_email.txt'
+        lastmail_exist = os.path.isfile(email_file)
+        
+        if lastmail_exist:
+            file = open(email_file,'r')
+            lastmail_time=file.readline().strip()
+            file.close()
+            datestring_format = '%Y-%m-%d %H:%M:%S'
+            email_time = hours_difference(lastmail_time,datestring_format)
+            # Debugging lines
+            #print (site)
+            #print (lastmail_time)
+            #print (email_time)
+        else:
+            email_time = email_frequency
+                
+        if email_time >= email_frequency:
+            email_alert(smtp_server,body_text,sender_name,recipients_list,email_subject)
+            file = open(email_file,'w')
+            current = datetime.now()
+            date_string = current.strftime('%Y-%m-%d %H:%M:%S')
+            # Debugging line
+            #print (date_string)
+            file.write(date_string)
+            file.close()
+            body_text = 'PyCodarAlert e-mail:\n'
+            email_subject = '[CODAR ALERT] Site:'
+
+# Exit with result code zero (no errors)
+sys.exit(0)
